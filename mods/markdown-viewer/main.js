@@ -2,9 +2,9 @@
 //
 // Two roles, one mod:
 // - Opened as its overlay (cmd-shift-o → mod.open:markdown): a picker of the Markdown
-//   files mentioned in the focused terminal's recent output, newest first. One match
-//   opens straight away. Enter opens it in a new tab, cmd-Enter in a split beside the
-//   terminal; type to filter, or type/paste a path.
+//   files mentioned in the focused terminal's recent output, newest first. Enter opens one
+//   the way a Cmd+click would (a split beside the terminal, or a new tab with "click": "tab"
+//   in markdown-viewer.json), cmd-Enter the other way; type to filter, or type/paste a path.
 // - As a pane (props: { file, on }): the file, rendered and editable a block at a time (live
 //   preview) or whole (Source), saved as you type and merged with changes made on disk; links to
 //   other .md files followed in place (Back), web links in the browser.
@@ -12,7 +12,8 @@ import { View, div, image } from "gpui-kit";
 import { v_flex, h_flex, InputState, Input, Editor, EditorState, TextView, TextareaState, Textarea } from "gpui-base";
 import { focused, panes, hc, exec, run, theme, settings, props, closeOverlay, home, appHome, readTextFile, writeTextFile, watchFolder, nextCommand, window, notify } from "herdr";
 import * as fs from "fs/promises";
-import { mentions, existing } from "./paths.js";
+import { existing } from "./paths.js";
+import { mentions, transcriptMentions, transcriptPath } from "./mentions.js";
 import { MARKDOWN, absolute } from "./markdown.js";
 import { icon as drawIcon, writeIcons } from "./icons.js";
 import { blocks, loadLocal, loadWeb, pruneOld } from "./pictures.js";
@@ -36,6 +37,11 @@ const LANGUAGES = {
 };
 const SAVE_MS = 800; // after the last keystroke
 const GONE = "This file isn't there (anymore).";
+// The picker's last list per terminal, and the Claude Code session it came from. A mod file's top
+// level runs once for all its copies, so the next picker shows it at once while it looks again.
+const FOUND = new Map();
+const FOUND_MAX = 50;
+const TRANSCRIPT_TAIL = 4_000_000;
 
 const openLink = (url) => exec(mac() ? "open" : "xdg-open", [url]).catch(() => null);
 const reveal = (path) => exec(mac() ? "open" : "xdg-open", mac() ? ["-R", path] : [dir(path)]).catch(() => null);
@@ -74,22 +80,60 @@ class Picker {
     // Relative paths are from the pane's folder (where the agent works), as Changes finds it.
     this.cwd = (f?.pane && panes().find((p) => p.pane === f.pane)?.cwd) || f?.cwd || null;
     this.on = this.terminal?.includes("/") ? this.terminal.split("/")[0] : null;
-    this.files = null; this.at = 0; this.filter = "";
+    this.files = FOUND.get(this.terminal)?.files ?? null; this.at = 0; this.filter = ""; this.tabs = false;
+    // Enter does what a Cmd+click on a path does: a split, unless the setting says tabs.
+    cx.spawn(async (cx) => {
+      const json = await readTextFile(`${appHome()}/markdown-viewer.json`).catch(() => null);
+      try { this.tabs = JSON.parse(json ?? "{}")?.click === "tab"; } catch {}
+      cx.notify();
+    });
     this.input = InputState.new({ placeholder: "Filter, or type a path…" });
     this.input.on("change", (_e, cx) => { this.filter = this.input.value(); this.at = 0; cx.notify(); });
-    this.input.on("submit", (e, cx) => this.choose(this.shown()[this.at], Boolean(e?.secondary), cx));
+    this.input.on("submit", (e, cx) => this.choose(this.shown()[this.at], this.split(e?.secondary), cx));
     this.input.focus();
     cx.spawn(async (cx) => {
       try {
         if (!this.terminal) throw new Error("No terminal has focus");
         const r = await hc(["read", this.terminal, "--json", "--lines", "400"]);
         if (r.code !== 0) throw new Error((r.stderr || "Cannot read the terminal").trim());
-        this.files = await existing(mentions(JSON.parse(r.stdout).text ?? ""), this.cwd, this.on);
-        // One file mentioned: no need to choose.
-        if (this.files.length === 1) return this.choose(this.files[0], false, cx);
-      } catch (e) { this.error = String(e?.message ?? e); this.files = []; }
+        // What's on screen is newest; the session's transcript has everything that scrolled away.
+        const candidates = mentions(JSON.parse(r.stdout).text ?? "");
+        const { session, paths } = await this.fromTranscript().catch(() => ({ session: null, paths: [] }));
+        candidates.push(...paths);
+        // What was found last time for this session stays (if it still exists): a busy screen
+        // can't empty the list.
+        const last = FOUND.get(this.terminal);
+        if (last && last.session === session) candidates.push(...last.files);
+        const files = await existing([...new Set(candidates)], this.cwd, this.on);
+        // Keep the row chosen while this looked, if it's still there.
+        const chosen = this.shown()[this.at];
+        this.files = files;
+        FOUND.delete(this.terminal); FOUND.set(this.terminal, { session, files });
+        if (FOUND.size > FOUND_MAX) FOUND.delete(FOUND.keys().next().value);
+        this.at = Math.max(0, this.shown().indexOf(chosen));
+      } catch (e) { if (!this.files?.length) { this.error = String(e?.message ?? e); this.files = []; } }
       cx.notify();
     });
+  }
+
+  // Plain Enter or click opens a file the way a Cmd+click does (a split, or a tab with the setting);
+  // with Cmd (or Ctrl) the other way.
+  split(modified) { return Boolean(modified) === this.tabs; }
+
+  // The Markdown files the terminal's Claude Code session mentioned or touched, and which session
+  // that is, from Revive's labels and the session's transcript. None for another machine's terminal.
+  async fromTranscript() {
+    if (this.on) return { session: null, paths: [] };
+    const r = await hc(["get", this.terminal, "--json"]);
+    const labels = r.code === 0 ? JSON.parse(r.stdout)?.labels ?? {} : {};
+    const session = labels["revive.session"] ?? null, cwd = labels["revive.cwd"];
+    if (!session || !cwd) return { session, paths: [] };
+    // Transcripts run past readTextFile's 1 MiB; only the end is read, so a long session stays fast.
+    const path = transcriptPath(home(), cwd, session);
+    let text = await fs.readFile(path, "utf8").catch(() => null);
+    if (text === null) text = (await exec("tail", ["-c", String(TRANSCRIPT_TAIL), path]).catch(() => null))?.stdout ?? null;
+    if (text && text.length > TRANSCRIPT_TAIL) text = text.slice(text.indexOf("\n", text.length - TRANSCRIPT_TAIL) + 1);
+    return { session, paths: text ? transcriptMentions(text, home()) : [] };
   }
 
   shown() {
@@ -118,7 +162,7 @@ class Picker {
     if (this.at >= list.length) this.at = Math.max(0, list.length - 1);
     const row = (f, i) => h_flex().id(`md-${i}`).h(44).px(12).gap(10).flex_none().items_center().rounded(7).cursor_pointer()
       .bg(i === this.at ? t.selected : t.popover).hover((s) => s.bg(i === this.at ? t.selected : t.hover))
-      .on_click((e, cx) => this.choose(f, Boolean(e?.modifiers?.platform || e?.modifiers?.control), cx))
+      .on_click((e, cx) => this.choose(f, this.split(e?.modifiers?.platform || e?.modifiers?.control), cx))
       .child(drawIcon("file").size(16).flex_none().text_color(t.muted))
       .child(v_flex().flex_1().min_w(0)
         .child(div().text_size(13).font_semibold().truncate().child(base(f)))
@@ -146,7 +190,7 @@ class Picker {
         .children(list.map(row))
         .when(Boolean(note), (e) => e.child(div().px(12).py(16).text_size(12).text_color(this.error ? t.ansi1 : t.dim).child(note))))
       .child(h_flex().h(30).flex_none().px(14).gap(14).items_center().border_t(1).border_color(t.border).text_size(11).text_color(t.dim)
-        .child("↵ new tab").child(`${mac() ? "⌘" : "ctrl "}↵ split beside`).child("↑↓ choose").child("esc close"));
+        .child(this.tabs ? "↵ new tab" : "↵ split beside").child(`${mac() ? "⌘" : "ctrl "}↵ ${this.tabs ? "split beside" : "new tab"}`).child("↑↓ choose").child("esc close"));
   }
 }
 

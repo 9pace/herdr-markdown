@@ -1,46 +1,26 @@
-// Finding the Markdown files a terminal mentions: the paths in its recent text,
-// newest (lowest on screen) first, kept only if the file is really there.
-import { exec } from "herdr";
+// Which candidate paths exist, where the terminal runs.
+import { exec, home } from "herdr";
+import * as fs from "fs/promises";
+import { absolute } from "./markdown.js";
 
-// A path-ish run of characters ending in .md / .markdown / .mdx. Stops at spaces,
-// quotes, brackets, box-drawing and the marks agents put around paths.
-const TOKEN = /[^\s`'"<>()\[\]{}|│⎿●✻*,;]+?\.(?:md|markdown|mdx)(?![\w-])/giu;
-
-function tokens(text) {
-  const out = [];
-  for (const m of text.matchAll(TOKEN)) {
-    let p = m[0];
-    if (/^[a-z][\w+.-]*:\/\//i.test(p) && !p.startsWith("file://")) continue; // a web link, not a file
-    p = p.replace(/^file:\/\//, "").replace(/^@/, "");
-    try { p = decodeURIComponent(p); } catch {}
-    if (p.length > 1) out.push(p);
-  }
-  return out;
-}
-
-// Agents wrap long lines themselves (the rest indented on the next line) and
-// terminals wrap them too, so a path can be cut in two: each line's last word is
-// also tried joined to the next line's first. Wrong joins don't exist on disk.
-export function mentions(text) {
-  const lines = text.split("\n"), seen = new Set(), out = [];
-  const add = (list) => { for (const p of list) if (!seen.has(p)) { seen.add(p); out.push(p); } };
-  for (let i = lines.length - 1; i >= 0; i--) {
-    const next = lines[i + 1];
-    if (next !== undefined) {
-      const tail = lines[i].match(/\S+$/)?.[0], head = next.match(/^\s*(\S+)/)?.[1];
-      if (tail && head) add(tokens(tail + head));
-    }
-    add(tokens(lines[i]).reverse());
-  }
-  return out;
-}
-
-// The ones that exist, as absolute paths (relative ones are from the terminal's
-// folder, ~ is home), in the same order, each once. Runs where the terminal is.
+// The candidates that exist, as absolute paths (relative ones from `cwd`, ~ is home), in order,
+// each once. Locally, paths under home are checked with `fs.exists`, which is much faster than a
+// shell (it also accepts a folder, rare with a .md name); the rest share one `sh`.
 export async function existing(candidates, cwd, on) {
   if (!candidates.length) return [];
+  if (on) return existingByShell(candidates, cwd, on);
+  const h = home();
+  const paths = [...new Set(candidates.slice(0, 300).map((c) => absolute(c, cwd, h)))];
+  const outside = paths.filter((p) => !p.startsWith(h + "/"));
+  const shellFound = new Set(outside.length ? await existingByShell(outside, "/", null).catch(() => []) : []);
+  const found = await Promise.all(paths.map((p) => p.startsWith(h + "/") ? fs.exists(p).catch(() => false) : shellFound.has(p)));
+  return paths.filter((_p, n) => found[n]);
+}
+
+// Paths as given (absolute ones come back unchanged), relative ones from `cwd`, checked by `sh`.
+async function existingByShell(candidates, cwd, on) {
   const script = 'cd "$1" 2>/dev/null; shift; for p; do case $p in "~/"*) p="$HOME/${p#??}";; esac; ' +
-    '[ -f "$p" ] && printf "%s/%s\\n" "$(cd "$(dirname "$p")" && pwd)" "$(basename "$p")"; done';
+    'case $p in /*) [ -f "$p" ] && printf "%s\\n" "$p";; *) [ -f "$p" ] && printf "%s/%s\\n" "$(cd "$(dirname "$p")" && pwd)" "$(basename "$p")";; esac; done';
   const r = await exec("sh", ["-c", script, "sh", cwd || "/", ...candidates.slice(0, 80)], { on });
   return [...new Set(r.stdout.split("\n").filter(Boolean))];
 }

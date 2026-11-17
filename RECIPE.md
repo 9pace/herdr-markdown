@@ -10,7 +10,7 @@ When a coding agent mentions a Markdown file, cmd-click the path in the conversa
 
 - A 46 px row with a file icon in `accent` and a text input: "Filter, or type a path…".
 - A 330 px scrolling list. Each row is 44 px with radius 7: a file icon, the file name at 13 px semibold, its folder at 11 px `dim` with home shown as `~`, and a split button on the right. The current row is on `selected`.
-- A 30 px footer at 11 px `dim`: "↵ new tab", "⌘↵ split beside" ("ctrl ↵" off macOS), "↑↓ choose", "esc close".
+- A 30 px footer at 11 px `dim`: "↵ split beside", "⌘↵ new tab" (the other way round with `"click": "tab"`) ("ctrl ↵" off macOS), "↑↓ choose", "esc close".
 - With nothing to list: "No Markdown files in this terminal's recent output. Type a path."
 
 **The viewer**, a tab or a pane on `background`:
@@ -24,9 +24,9 @@ When a coding agent mentions a Markdown file, cmd-click the path in the conversa
 ## How it behaves
 
 - **Agent status:** it shows none; working, blocked, done and idle agents look the same.
-- **The picker opens** with the paths in the terminal's last 400 lines, lowest on screen first, keeping only files that exist where the terminal runs. One match opens straight away.
-- **Keys in the picker:** Enter opens a tab named after the file, cmd-Enter a split beside the terminal, up and down move, Esc closes, typing filters. If nothing matches, Enter tries the text as a path.
-- **Mouse in the picker:** a click opens a tab, a cmd- or ctrl-click or the split button opens a split. Rows change color on hover.
+- **The picker opens** with the last list it found for that terminal (kept for 50 terminals, shared by every copy), then rebuilds it. First the paths in the terminal's last 400 lines, lowest first. Then, for a terminal with Revive's `revive.session` and `revive.cwd` labels, the Markdown paths in the last 4 MB of that Claude Code transcript, `~/.claude/projects/<cwd, characters other than letters, digits and - as ->/<session>.jsonl`, newest first: the agent's messages, its tools' `file_path` or `path`, and paths in its shell commands, a relative one resolved from its entry's `cwd`. Then the last list for the same session. It keeps the files that exist where the terminal runs, in that order, and shows the list even with one match.
+- **Keys in the picker:** Enter opens a split beside the terminal (a tab named after the file with `"click": "tab"`), cmd-Enter the other, up and down move, Esc closes, typing filters. If nothing matches, Enter tries the text as a path.
+- **Mouse in the picker:** a click opens it as Enter does, a cmd- or ctrl-click the other way, and the split button always opens a split. Rows change color on hover.
 - **Reloading:** local files are watched, with a check every 15 s as a backstop. Remote files are checked every 3 s.
 - **Copy:** puts the block's exact text on the clipboard. The button shows a check and "Copied" for 1.5 s.
 - **Long code lines** scroll sideways inside the block; they don't wrap.
@@ -44,11 +44,11 @@ When a coding agent mentions a Markdown file, cmd-click the path in the conversa
 
 ## Built from
 
-- **`mods/markdown-viewer`:** `main.js` (picker and viewer), `paths.js` (finding paths), `markdown.js` (fences and paths), `obsidian.js` (Obsidian syntax to Markdown, finding a wikilink's file), `doc.js` (a file as blocks), `caret.js` (where a click lands in a block's Markdown), `merge.js` (three-way merge by lines). Those five import nothing from Herdr. Also `icons.js`, `pictures.js` (cutting images and code out of the text, loading images), `mod.json`. Each code block is a read-only `EditorState` with `line_numbers: false`, drawn with `Editor.new`. `props: {file, on?}` makes a viewer; no `file` makes the picker.
+- **`mods/markdown-viewer`:** `main.js` (picker and viewer), `paths.js` (which candidate paths exist), `markdown.js` (fences and paths), `obsidian.js` (Obsidian syntax to Markdown, finding a wikilink's file), `doc.js` (a file as blocks), `caret.js` (where a click lands in a block's Markdown), `merge.js` (three-way merge by lines), `mentions.js` (Markdown paths in terminal text and in a Claude Code transcript). Those six import nothing from Herdr. Also `icons.js`, `pictures.js` (cutting images and code out of the text, loading images), `mod.json`. Each code block is a read-only `EditorState` with `line_numbers: false`, drawn with `Editor.new`. `props: {file, on?}` makes a viewer; no `file` makes the picker.
 - **Opening the picker:** a key bound to `mod.open:markdown-viewer`.
 - **Opening a viewer:** `pane.split {direction: "right", pane, mod, props}` or `tab.new {mod, props, name}`.
 - **Herdr functions:** `focused`, `panes`, `hc`, `exec`, `run`, `theme`, `settings`, `props`, `closeOverlay`, `home`, `appHome`, `readTextFile`, `writeTextFile`, `watchFolder`, `nextCommand`, `window`, `notify`, plus `fs/promises` and `localStorage`.
-- **Programs:** `hc read`, `sh` where the terminal runs. `open` on macOS, `xdg-open` elsewhere. `cksum`, `cp`, `find` for local images and wikilinks, `curl` for web images.
+- **Programs:** `hc read`, `sh` where the terminal runs. `open` on macOS, `xdg-open` elsewhere. `cksum`, `cp`, `find` for local images and wikilinks, `curl` for web images, `tail` for a transcript the mod can't read whole.
 - **Files written:** copies of images in `data/markdown-viewer/images`, readable only by the user, removed after 30 days untouched.
 - **`open.sh` (macOS):** writes `data/markdown-viewer/request.json` and runs `markdown-viewer.show`. A shown viewer takes the file and writes `data/markdown-viewer/ack`. With no answer in about 0.4 s, it runs `pane.split`.
 - **`router/` (macOS):** `main.swift` and `build.sh` build `~/Applications/Markdown Router.app`, a background-only default handler for `net.daringfireball.markdown`. `--make-default` saves the current default's bundle id in `data/markdown-viewer/fallback`. `--restore` gives Markdown back to it.
@@ -64,7 +64,7 @@ When a coding agent mentions a Markdown file, cmd-click the path in the conversa
 - `window()` can be null, including during `herdr-app check`, so guard it in `render`.
 - `EditorState.new` can't run during `render`, and `herdr-app check` won't catch it unless that path draws at load. Create it in the click handler or when the text loads.
 - The running Herdr app on macOS may report no bundle id, so `open.sh` matches its path or the name `herdr-app`.
-- Claude Code exposes only its visible screen to `hc read`, and its condensed transcript can drop paths.
+- Claude Code exposes only its visible screen to `hc read`, which is why the transcript is read too. Files in the home folder are checked with `fs.exists` (a shell per open was slow); others, and remote terminals, with `sh`.
 - With the router as the default, plain `open file` comes straight back to Herdr. Open elsewhere has to name the saved app.
 - Tested on macOS only. The Linux paths haven't been run. Windows isn't supported: it uses `sh` and `/` paths.
 
@@ -72,7 +72,7 @@ When a coding agent mentions a Markdown file, cmd-click the path in the conversa
 
 - `herdr-app check` passes for `markdown-viewer`.
 - With `.md` paths on the terminal's screen, the key lists them newest first, and only those that exist.
-- Enter opens a tab, cmd-Enter a split, and typing a path that exists opens it.
+- The list shows even with one match. Enter opens a split, cmd-Enter a tab, and typing a path that exists opens it.
 - Editing the open file updates the viewer without a click.
 - A link to another `.md` file opens in place, and Back returns.
 - Source and live preview switch and stay as chosen. A click on a paragraph edits it with the cursor near the click, and a click on another block switches without a frame where neither is open.

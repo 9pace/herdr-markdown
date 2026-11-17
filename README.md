@@ -11,7 +11,7 @@ rendered, right beside the conversation. No switching to another app or hunting 
 - **Viewer:** rendered Markdown with images and highlighted code blocks with a copy button, reloading as the agent edits the file, with a Source switch. Links to other `.md` files open in place, with Back. Web links open in your browser.
 - **Editing:** click a block (heading, paragraph, list item, quote, table, code) to edit its Markdown in place. Esc or a click elsewhere renders it again, and a click below the last block adds one. Source edits the whole file. Edits save 0.8 s after you stop typing, and an agent's changes to the open file merge into yours. If you both changed the same lines, a bar asks Keep mine or Take theirs. Files on other machines are read-only.
 - **Obsidian notes:** `[[wikilinks]]` open the note they name, found the way Obsidian finds it (beside the note, then anywhere in its vault). `![[picture.png]]` shows the picture. Callouts and GitHub's `> [!NOTE]` alerts get a title line, `==highlights==` are bold, `%%comments%%` and block ids are hidden, and front matter shows as a properties table.
-- **Picker:** a key lists the `.md` paths on the focused terminal's screen, newest first. Enter opens a tab, cmd-Enter (ctrl-Enter on Linux) opens a split. Type to filter, or type a path.
+- **Picker:** a key lists the `.md` paths the agent mentioned, newest first. Enter opens one the way a click does (a split, or a tab with the setting below), cmd-Enter (ctrl-Enter on Linux) the other way. Type to filter, or type a path.
 - **Other machines:** the picker and viewer work with terminals on your other Herdr machines too.
 
 ## Install
@@ -58,7 +58,7 @@ In `~/.config/herdr-app/keys.json`, inside `"global"`. Use one of these, or any 
 - **Images:** local images show by themselves, as PNG, JPEG, GIF, WebP or SVG up to 20 MB. Web images wait for a click, so opening a file never contacts a server it mentions. Images in files on other machines aren't shown.
 - **Code highlighting:** JavaScript, Python, Java, C, C++, C#, Go, Rust, Ruby, PHP, Bash, SQL, YAML, JSON, HTML, CSS and Markdown. TypeScript uses JavaScript's colors. Other languages, such as Swift and TOML, show as plain text with their label.
 - **Links:** a link to a non-Markdown file only shows it in its folder and never opens it, because it could point at something that runs.
-- **Picker reach:** it reads what the terminal can show. Claude Code exposes only its visible screen, so older paths may not be listed.
+- **Picker reach:** it reads the terminal's screen and, for Claude Code with [herdr-revive](https://github.com/dmazlum/herdr-revive)'s labels, the session's transcript, so paths that scrolled away are listed. Without Revive, Claude Code shows only its visible screen.
 
 ## Known issues
 
