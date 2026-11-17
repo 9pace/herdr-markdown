@@ -9,6 +9,7 @@ rendered, right beside the conversation. No switching to another app or hunting 
 
 - **Click a path (macOS):** cmd-click a `.md` path in the conversation to open it in a split on the right, or in the viewer already showing. Outside Herdr, `.md` files keep opening in your usual app.
 - **Viewer:** rendered Markdown with images and highlighted code blocks with a copy button, reloading as the agent edits the file, with a Source/Preview switch. Links to other `.md` files open in place, with Back. Web links open in your browser.
+- **Obsidian notes:** `[[wikilinks]]` open the note they name, found the way Obsidian finds it (beside the note, then anywhere in its vault). `![[picture.png]]` shows the picture. Callouts and GitHub's `> [!NOTE]` alerts get a title line, `==highlights==` are bold, `%%comments%%` and block ids are hidden, and front matter shows as a properties table.
 - **Picker:** a key lists the `.md` paths on the focused terminal's screen, newest first. Enter opens a tab, cmd-Enter (ctrl-Enter on Linux) opens a split. Type to filter, or type a path.
 - **Other machines:** the picker and viewer work with terminals on your other Herdr machines too.
 
@@ -58,8 +59,17 @@ In `~/.config/herdr-app/keys.json`, inside `"global"`. Use one of these, or any 
 - **The label and copy button can cover a long line** until you scroll it sideways.
 - **Code blocks inside lists keep Herdr's default look**, because drawing them separately would split the list.
 - **Images inside a link don't follow it** when clicked, as with most README badges.
+- **Wikilinks to a heading open the note at its top.** The viewer can't scroll to a heading. Embedded notes (`![[Note]]`) show as a link, not inline.
 - **Reference-style images** (`![alt][ref]`) stay as text.
 - **Text can't be selected across an image**, because the text on each side is drawn separately.
+
+## Tests
+
+```sh
+npm test
+```
+
+They cover the modules that import nothing from Herdr.
 
 ## License
 

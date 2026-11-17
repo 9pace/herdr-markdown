@@ -18,7 +18,7 @@ When a coding agent mentions a Markdown file, cmd-click the path in the conversa
 - A 40 px header with a `border` line below: Back when there's history, a file icon in `accent`, the file name at 13 px semibold, its folder at 11 px `dim` (prefixed with the machine for a remote file), and 26 px buttons for Source or Preview, show in folder, and open elsewhere. The last two are hidden for remote files.
 - Code blocks on `raised`, radius 10, 14/12 px padding, 13 px mono with no line numbers, 21 px per line and no blank first line. In the top-right corner, 7 px in: the language as written, at 11 px on a `background` chip, and a copy button.
 - Images between the text, at their own size or `width` attribute, never wider than the column, radius 6. Images not shown yet are 30 px `raised` chips with an icon, the alt text and a note.
-- The file rendered at 14 px, centered to at most 860 px, with 28/24 px padding. Source shows it in a read-only editor with Markdown highlighting. Front matter isn't shown in the preview.
+- The file rendered at 14 px, centered to at most 860 px, with 28/24 px padding. Source shows it in a read-only editor with Markdown highlighting. Front matter shows as a two-column "Property | Value" table at the top.
 - Notes: "Loading…", "This file is empty.", "This file isn't there (anymore)."
 
 ## How it behaves
@@ -35,17 +35,18 @@ When a coding agent mentions a Markdown file, cmd-click the path in the conversa
 - **Images in remote files** stay a chip naming the machine.
 - **Images side by side:** ones with only space between them, such as badges, share a wrapping row.
 - **Links:** `.md`, `.markdown` and `.mdx` links open in place, with Back. http, https and mailto links open in the system's handler. Other local files are shown in their folder, never opened.
+- **Obsidian syntax** (`obsidian.js`, outside code): `[[Note]]`, `[[Note|alias]]` and `[[Note#Heading]]` are links reading `Note`, `alias` and `Note › Heading`. A click looks for `Note.md` beside the file, then from the root of its vault (the deepest in Obsidian's `obsidian.json`), then anywhere in the vault, case-insensitively, shallowest first, skipping `.obsidian` and `.trash`. A note opens in place, another file is shown in its folder, and no match posts "No note named …". `![[picture.png|300]]` draws the picture, found the same way, at that width. `![[Note]]` is a link after ↳. A callout or GitHub alert (`> [!type] Title`) starts with a bold line: the type's symbol and the title, or the type. `==text==` is bold. `%%comments%%`, `^block-ids` and lines holding only a block id are hidden.
 - **Source or Preview** is remembered per copy of the mod.
 - **Open elsewhere:** with the router installed, the app it took over from; otherwise the default app.
 - **Cmd-click on macOS, with the router as the default for `.md`:** with Herdr in front, the file goes to the viewer showing in this tab, or a new split on the right. With anything else in front, it goes to the app the router took over from, or TextEdit if none is known.
 
 ## Built from
 
-- **`mods/markdown-viewer`:** `main.js` (picker and viewer), `paths.js` (finding paths), `icons.js`, `pictures.js` (cutting images and code out of the text, loading images), `mod.json`. Each code block is a read-only `EditorState` with `line_numbers: false`, drawn with `Editor.new`. `props: {file, on?}` makes a viewer; no `file` makes the picker.
+- **`mods/markdown-viewer`:** `main.js` (picker and viewer), `paths.js` (finding paths), `markdown.js` (fences and paths), `obsidian.js` (Obsidian syntax to Markdown, finding a wikilink's file). Those two import nothing from Herdr. Also `icons.js`, `pictures.js` (cutting images and code out of the text, loading images), `mod.json`. Each code block is a read-only `EditorState` with `line_numbers: false`, drawn with `Editor.new`. `props: {file, on?}` makes a viewer; no `file` makes the picker.
 - **Opening the picker:** a key bound to `mod.open:markdown-viewer`.
 - **Opening a viewer:** `pane.split {direction: "right", pane, mod, props}` or `tab.new {mod, props, name}`.
-- **Herdr functions:** `focused`, `panes`, `hc`, `exec`, `run`, `theme`, `settings`, `props`, `closeOverlay`, `home`, `appHome`, `readTextFile`, `watchFolder`, `nextCommand`, `window`, plus `fs/promises` and `localStorage`.
-- **Programs:** `hc read`, `sh` where the terminal runs. `open` on macOS, `xdg-open` elsewhere. `cksum`, `cp`, `find` for local images, `curl` for web images.
+- **Herdr functions:** `focused`, `panes`, `hc`, `exec`, `run`, `theme`, `settings`, `props`, `closeOverlay`, `home`, `appHome`, `readTextFile`, `watchFolder`, `nextCommand`, `window`, `notify`, plus `fs/promises` and `localStorage`.
+- **Programs:** `hc read`, `sh` where the terminal runs. `open` on macOS, `xdg-open` elsewhere. `cksum`, `cp`, `find` for local images and wikilinks, `curl` for web images.
 - **Files written:** copies of images in `data/markdown-viewer/images`, readable only by the user, removed after 30 days untouched.
 - **`open.sh` (macOS):** writes `data/markdown-viewer/request.json` and runs `markdown-viewer.show`. A shown viewer takes the file and writes `data/markdown-viewer/ack`. With no answer in about 0.4 s, it runs `pane.split`.
 - **`router/` (macOS):** `main.swift` and `build.sh` build `~/Applications/Markdown Router.app`, a background-only default handler for `net.daringfireball.markdown`. `--make-default` saves the current default's bundle id in `data/markdown-viewer/fallback`. `--restore` gives Markdown back to it.
@@ -75,3 +76,5 @@ When a coding agent mentions a Markdown file, cmd-click the path in the conversa
 - Source and Preview switch and stay as chosen.
 - With the router: cmd-click on a path opens it in a split, a second opens in that same viewer, and opening a `.md` from Finder goes to the previous default app.
 - `--restore` gives `.md` files back to the previous default app.
+- In a vault note, a `[[wikilink]]` to a note in another folder opens it, a callout shows its title line, and front matter shows as a table.
+- `npm test` passes.

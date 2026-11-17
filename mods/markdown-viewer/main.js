@@ -10,11 +10,12 @@
 //   browser.
 import { View, div, image } from "gpui-kit";
 import { v_flex, h_flex, InputState, Input, Editor, EditorState, TextView } from "gpui-base";
-import { focused, panes, hc, exec, run, theme, settings, props, closeOverlay, home, appHome, readTextFile, watchFolder, nextCommand, window } from "herdr";
+import { focused, panes, hc, exec, run, theme, settings, props, closeOverlay, home, appHome, readTextFile, watchFolder, nextCommand, window, notify } from "herdr";
 import * as fs from "fs/promises";
 import { mentions, existing } from "./paths.js";
 import { icon as drawIcon, writeIcons } from "./icons.js";
 import { blocks, loadLocal, loadWeb, pruneOld } from "./pictures.js";
+import { obsidian, embeddedPictures, wikiTarget, wikiCandidates, fileName, vaultOf, closest } from "./obsidian.js";
 
 const DATA = () => `${appHome()}/data/markdown-viewer`;
 const mac = () => window()?.platform === "macos";
@@ -144,14 +145,14 @@ class Picker {
   }
 }
 
-// Front matter isn't part of what a reader sees.
-const body = (text) => text.replace(/^---\n[\s\S]*?\n---\n/, "");
+// Where Obsidian lists its vaults: macOS, then Linux.
+const VAULT_LISTS = ["Library/Application Support/obsidian/obsidian.json", ".config/obsidian/obsidian.json"];
 
 class Viewer {
   constructor(file, on, cx) {
     this.file = file; this.on = on; this.history = []; this.text = null; this.error = null;
     this.source = localStorage.getItem("source") === "1"; this.editor = null; this.gen = 0;
-    this.parts = []; this.pictures = {};
+    this.parts = []; this.pictures = {}; this.embeds = {};
     pruneOld();
     this.load(cx);
     this.listen(cx);
@@ -181,7 +182,7 @@ class Viewer {
 
   load(cx) {
     const gen = ++this.gen, file = this.file;
-    this.text = null; this.error = null; this.editor?.release(); this.editor = null;
+    this.text = null; this.error = null; this.editor?.release(); this.editor = null; this.embeds = {};
     this.parts.forEach((p) => p.code?.editor?.release()); this.parts = [];
     cx.spawn(async (cx) => {
       try {
@@ -198,9 +199,10 @@ class Viewer {
   set(text, cx) {
     this.text = text;
     const before = this.parts;
-    this.parts = blocks(body(text), this.file);
+    this.parts = blocks(obsidian(text, { pictures: this.embeds }), this.file);
     this.keepOrMakeCode(before);
     this.checkPictures(cx);
+    this.findEmbeds(cx);
     if (this.editor) this.editor.set_value(text);
     else if (this.source) this.editor = this.makeEditor(text);
   }
@@ -263,6 +265,60 @@ class Viewer {
           if (JSON.stringify(found) !== JSON.stringify(this.pictures[src])) { this.pictures[src] = found; cx.notify(); }
         }
       } finally { this.checking = false; }
+    });
+  }
+
+  // The vault holding this file, from Obsidian's list, or null (a file outside every vault, or on
+  // another machine). Asked once per file.
+  async vault() {
+    if (this.on) return null;
+    if (this.vaultFor?.file === this.file) return this.vaultFor.vault;
+    let vault = null;
+    for (const list of VAULT_LISTS) {
+      const json = await readTextFile(`${home()}/${list}`).catch(() => null);
+      if (json && (vault = vaultOf(this.file, json))) break;
+    }
+    this.vaultFor = { file: this.file, vault };
+    return vault;
+  }
+
+  // The file a wikilink names, as Obsidian finds it: beside this note, from the vault's root, else
+  // the shallowest file of that name anywhere in the vault (case doesn't matter). Null if none.
+  async findLinked(target) {
+    const vault = await this.vault();
+    const [hit] = await existing(wikiCandidates(target, this.file, vault), null, this.on).catch(() => []);
+    if (hit || !vault) return hit ?? null;
+    const name = fileName(target), base = name.slice(name.lastIndexOf("/") + 1).replace(/[*?[\]\\]/g, "\\$&");
+    const r = await exec("find", [vault, "-type", "f", "-iname", base, "-not", "-path", "*/.obsidian/*", "-not", "-path", "*/.trash/*"]).catch(() => null);
+    const tail = `/${name}`.toLowerCase();
+    return closest((r?.stdout ?? "").split("\n").filter((p) => p.toLowerCase().endsWith(tail)));
+  }
+
+  // Pictures a note embeds by name (![[diagram.png]]) can be anywhere in the vault: each is looked
+  // up once, and the note is drawn again with the ones found.
+  findEmbeds(cx) {
+    const gen = this.gen, names = embeddedPictures(this.text ?? "").filter((n) => !(n in this.embeds));
+    if (!names.length) return;
+    for (const n of names) this.embeds[n] = null;
+    cx.spawn(async (cx) => {
+      let found = false;
+      for (const n of names) {
+        const path = await this.findLinked(n).catch(() => null);
+        if (gen !== this.gen) return;
+        if (path) { this.embeds[n] = path; found = true; }
+      }
+      if (found && this.text !== null) { this.set(this.text, cx); cx.notify(); }
+    });
+  }
+
+  // A [[wikilink]]: a note opens here (Back returns); another file is shown in its folder.
+  followWiki({ target }, cx) {
+    if (!target) return; // [[#Heading]]: this note
+    cx.spawn(async (cx) => {
+      const path = await this.findLinked(target).catch(() => null);
+      if (!path) { notify({ title: `No note named ${target}`, level: "warning" }); return; }
+      if (/\.(md|markdown|mdx)$/i.test(path)) { this.history.push(this.file); this.file = path; this.load(cx); cx.notify(); }
+      else if (!this.on) reveal(path);
     });
   }
 
@@ -331,6 +387,8 @@ class Viewer {
   // any other local file is only shown in its folder, never opened (a link could point at
   // something that runs).
   link(url, cx) {
+    const wiki = wikiTarget(url);
+    if (wiki) { this.followWiki(wiki, cx); return; }
     if (/^(https?|mailto):/i.test(url)) { openLink(url); return; }
     if (/^[a-z][\w+.-]*:/i.test(url) && !url.startsWith("file:")) return;
     let path = url.replace(/^file:\/\//, "").split("#")[0];
