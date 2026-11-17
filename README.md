@@ -8,7 +8,8 @@ rendered, right beside the conversation. No switching to another app or hunting 
 ## What you get
 
 - **Click a path (macOS):** cmd-click a `.md` path in the conversation to open it in a split on the right, or in the viewer already showing. Outside Herdr, `.md` files keep opening in your usual app.
-- **Viewer:** rendered Markdown with images and highlighted code blocks with a copy button, reloading as the agent edits the file, with a Source/Preview switch. Links to other `.md` files open in place, with Back. Web links open in your browser.
+- **Viewer:** rendered Markdown with images and highlighted code blocks with a copy button, reloading as the agent edits the file, with a Source switch. Links to other `.md` files open in place, with Back. Web links open in your browser.
+- **Editing:** click a block (heading, paragraph, list item, quote, table, code) to edit its Markdown in place. Esc or a click elsewhere renders it again, and a click below the last block adds one. Source edits the whole file. Edits save 0.8 s after you stop typing, and an agent's changes to the open file merge into yours. If you both changed the same lines, a bar asks Keep mine or Take theirs. Files on other machines are read-only.
 - **Obsidian notes:** `[[wikilinks]]` open the note they name, found the way Obsidian finds it (beside the note, then anywhere in its vault). `![[picture.png]]` shows the picture. Callouts and GitHub's `> [!NOTE]` alerts get a title line, `==highlights==` are bold, `%%comments%%` and block ids are hidden, and front matter shows as a properties table.
 - **Picker:** a key lists the `.md` paths on the focused terminal's screen, newest first. Enter opens a tab, cmd-Enter (ctrl-Enter on Linux) opens a split. Type to filter, or type a path.
 - **Other machines:** the picker and viewer work with terminals on your other Herdr machines too.
