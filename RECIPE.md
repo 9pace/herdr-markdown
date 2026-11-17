@@ -38,7 +38,7 @@ When a coding agent mentions a Markdown file, cmd-click the path in the conversa
 - **Obsidian syntax** (`obsidian.js`, outside code): `[[Note]]`, `[[Note|alias]]` and `[[Note#Heading]]` are links reading `Note`, `alias` and `Note › Heading`. A click looks for `Note.md` beside the file, then from the root of its vault (the deepest in Obsidian's `obsidian.json`), then anywhere in the vault, case-insensitively, shallowest first, skipping `.obsidian` and `.trash`. A note opens in place, another file is shown in its folder, and no match posts "No note named …". `![[picture.png|300]]` draws the picture, found the same way, at that width. `![[Note]]` is a link after ↳. A callout or GitHub alert (`> [!type] Title`) starts with a bold line: the type's symbol and the title, or the type. `==text==` is bold. `%%comments%%`, `^block-ids` and lines holding only a block id are hidden.
 - **Source or Preview** is remembered per copy of the mod.
 - **Open elsewhere:** with the router installed, the app it took over from; otherwise the default app.
-- **Cmd-click on macOS, with the router as the default for `.md`:** with Herdr in front, the file goes to the viewer showing in this tab, or a new split on the right. With anything else in front, it goes to the app the router took over from, or TextEdit if none is known.
+- **Cmd-click on macOS, with the router as the default for `.md`:** with Herdr in front, the file goes to the viewer showing in this tab, or a new split on the right; with `{ "click": "tab" }` in `~/.config/herdr-app/markdown-viewer.json`, a new tab named after the file. With anything else in front, it goes to the app the router took over from, or TextEdit if none is known.
 
 ## Built from
 
@@ -76,5 +76,6 @@ When a coding agent mentions a Markdown file, cmd-click the path in the conversa
 - Source and Preview switch and stay as chosen.
 - With the router: cmd-click on a path opens it in a split, a second opens in that same viewer, and opening a `.md` from Finder goes to the previous default app.
 - `--restore` gives `.md` files back to the previous default app.
+- With `{ "click": "tab" }`, cmd-click on a path opens a new tab named after the file.
 - In a vault note, a `[[wikilink]]` to a note in another folder opens it, a callout shows its title line, and front matter shows as a table.
 - `npm test` passes.

@@ -33,6 +33,12 @@ This makes a small background app your default for `.md` files. When Herdr is in
 
 To undo it, run the same app with `--restore`, which gives `.md` files back to your usual app.
 
+A click opens a split on the right, or goes to the viewer already showing in the tab. To open each click in a new tab instead, write `~/.config/herdr-app/markdown-viewer.json`:
+
+```json
+{ "click": "tab" }
+```
+
 **3. Add a key for the picker**
 
 In `~/.config/herdr-app/keys.json`, inside `"global"`. Use one of these, or any free key:
@@ -69,7 +75,7 @@ In `~/.config/herdr-app/keys.json`, inside `"global"`. Use one of these, or any 
 npm test
 ```
 
-They cover the modules that import nothing from Herdr.
+They cover the modules that import nothing from Herdr, and run `open.sh` against a fake home so they never touch your Herdr.
 
 ## License
 
