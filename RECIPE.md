@@ -37,7 +37,7 @@ When a coding agent mentions a Markdown file, cmd-click the path in the conversa
 - **Links:** `.md`, `.markdown` and `.mdx` links open in place, with Back. http, https and mailto links open in the system's handler. Other local files are shown in their folder, never opened.
 - **Source or Preview** is remembered per copy of the mod.
 - **Open elsewhere:** with the router installed, the app it took over from; otherwise the default app.
-- **Cmd-click on macOS, with the router as the default for `.md`:** with Herdr in front, the file goes to the viewer showing in this tab, or a new split on the right. With anything else in front, it goes to the app the router took over from, or TextEdit if none is known.
+- **Cmd-click on macOS, with the router as the default for `.md`:** with Herdr in front, the file goes to the viewer showing in this tab, or a new split on the right; with `{ "click": "tab" }` in `~/.config/herdr-app/markdown-viewer.json`, a new tab named after the file. With anything else in front, it goes to the app the router took over from, or TextEdit if none is known.
 
 ## Built from
 
@@ -75,3 +75,5 @@ When a coding agent mentions a Markdown file, cmd-click the path in the conversa
 - Source and Preview switch and stay as chosen.
 - With the router: cmd-click on a path opens it in a split, a second opens in that same viewer, and opening a `.md` from Finder goes to the previous default app.
 - `--restore` gives `.md` files back to the previous default app.
+- With `{ "click": "tab" }`, cmd-click on a path opens a new tab named after the file.
+- `npm test` passes.
